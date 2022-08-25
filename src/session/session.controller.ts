@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Put, Query, HttpException, HttpStatus, Inject, Param } from '@nestjs/common';
+import { Body, Controller,  Post, Put, Query, HttpException, HttpStatus, Inject, Param } from '@nestjs/common';
 import { SessionService } from './session.service';
 
 @Controller()
@@ -7,6 +7,10 @@ export class SessionController {
 
     @Post()
     async create(@Body() data:any){
-       await this.sessionService.createClient(data)
+       const res=await this.sessionService.createClient(data)
+       if(!res.success){
+        throw new HttpException(res,HttpStatus.NOT_ACCEPTABLE)
+       }
+       return res
     }
 }

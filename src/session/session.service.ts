@@ -1,12 +1,10 @@
-import { Injectable, OnModuleDestroy, HttpException, HttpStatus } from '@nestjs/common'
-import { Request } from 'express'
-// import * as fs from 'node:fs'
-// import { resolve } from 'node:path'
+import { Injectable, OnModuleDestroy} from '@nestjs/common'
 import { Ack, create, Message, MessageType, Whatsapp } from '@wppconnect-team/wppconnect';
 import * as fs from 'node:fs';
 interface WhatsappClient {
     id?: string,
-    client: Whatsapp,
+    wid:string,
+    client?: Whatsapp,
     webhook: string
 }
 
@@ -15,11 +13,25 @@ export class SessionService implements OnModuleDestroy {
     // the client instances cache object
     private clients: { [key: string]: WhatsappClient } = {}
 
+    constructor(){
+        if(fs.existsSync('whatsapp-clients.json')){
+            const clients=fs.readFileSync('whatsapp-clients.json','utf-8')
+            this.init(JSON.parse(clients))
+        }
+    }
+
+    private async init(clients:WhatsappClient[]){
+        for(const client of clients){
+            await this.createClient(client,false)
+        }
+
+    }
+
     uid(): string {
         return (Date.now() + Math.random() * 10000).toString(36).replace('.', '');
     }
 
-    async createClient(data: WhatsappClient):Promise<{data:any,message:string,success:boolean}> {
+    async createClient(data: WhatsappClient,addToFile=true):Promise<{data:any,message:string,success:boolean}> {
 
         if(Object.values(this.clients).length===5){
             return {data:[],success:false,message:'No se puede crear mas de 5 sessiones'}
@@ -65,6 +77,7 @@ export class SessionService implements OnModuleDestroy {
         // console.log('*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*\n', messages);
         // console.log('---------------------------------------------');
         const wid = await client.getWid()
+        
         console.log('WID---', wid);
 
 
@@ -100,8 +113,22 @@ export class SessionService implements OnModuleDestroy {
             console.log('ACK ACK -----\n', ack);
         });
 
-        this.clients[session] = { id: session, client, webhook: data.webhook }
+
+        this.clients[session] = { id: session, client, webhook: data.webhook ,wid}
+
+        if(addToFile){
+            fs.writeFileSync('whatsapp-clients.json',JSON.stringify(Object.values(this.clients)))
+
+        }
         return {data:{id:session,qrCodeBase64},success:true,message:'session creada exitosamente'}
+    }
+
+    findClientById(clientId:string){
+        return this.clients[clientId]
+    }
+
+    findClientByWid(wid:string){//wid es el numero de whatsapp
+        return Object.values(this.clients).find(c=>c.wid===wid)
     }
 
     async onModuleDestroy() {
