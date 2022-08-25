@@ -1,0 +1,14 @@
+root = true #Archivo de configuracion mandante
+
+[*]
+end_of_line = crlf #Saltos de linea unix y windows (\n)
+charset = utf-8 #Decodificacion de caracteres
+indent_style = space #Estilo de indentacion
+indent_size = 4 #Tamaño de indentacion
+trim_trailing_whitespace = true #Elimina espacios en blanco al final de la linea
+insert_final_newline = false #Inserta un salto de linea al final del archivo
+max_line_length = 120 #Longitud maxima de la linea
+
+[*.md]
+max_line_length = off
+trim_trailing_whitespace = false
