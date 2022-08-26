@@ -171,9 +171,12 @@ export class SessionService implements OnModuleDestroy {
 
         if (data.wid) client = this.findClientByWid(data.wid)
         if (!data.id) client = this.findClientById(data.id)
+        
         if (!client) {
-            return { data: null, message: 'el cliente no existe o aun no se ha iniciado', success: false }
+            return { data: null, message: 'el cliente no existe', success: false }
         }
+
+        if(data.webhook) client.webhook=data.webhook
 
         return await this.createClient(client,false)
         
