@@ -14,8 +14,8 @@ export class SessionController {
        return res
     }
 
-    @Put('open')
-    async open(@Body() data:any){
+    @Put('start')
+    async restart(@Body() data:any){
        const res=await this.sessionService.openClient(data)
        if(!res.success){
         throw new HttpException(res,HttpStatus.NOT_ACCEPTABLE)
@@ -23,7 +23,7 @@ export class SessionController {
        return res
     }
 
-    @Put('close')
+    @Put('shutdown')
     async close(@Body() data:any){
        const res=await this.sessionService.closeClient(data)
        if(!res.success){
