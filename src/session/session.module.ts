@@ -7,4 +7,4 @@ import { SessionService } from './session.service'
   providers: [SessionService],
   controllers:[SessionController]
 })
-export class PrismaModule {}
+export class SessionModule {}
