@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common'
+import { HttpException, HttpStatus, Injectable, OnModuleDestroy } from '@nestjs/common'
 import { Ack, create, Message, MessageType, Whatsapp } from '@wppconnect-team/wppconnect';
 import * as fs from 'node:fs';
 import axios, { Axios } from 'axios';
@@ -25,7 +25,7 @@ export class SessionService implements OnModuleDestroy {
         }
 
         if (!fs.existsSync('available_numbers.json')) {
-           fs.writeFileSync('available_numbers.json',JSON.stringify(['51938432015']))
+            fs.writeFileSync('available_numbers.json', JSON.stringify(['51938432015']))
         }
 
 
@@ -89,7 +89,7 @@ export class SessionService implements OnModuleDestroy {
 
         client.onAnyMessage(async (message: Message) => {
             console.log('CALLBACK DE ' + wid, 'SESSION NAME ' + session);
-            if(message.isGroupMsg){
+            if (message.isGroupMsg) {
                 console.log('Mensaje de grupo', message.body);
                 return
             }
@@ -107,18 +107,18 @@ export class SessionService implements OnModuleDestroy {
                 console.log('MENSAJE RECIBIDO', message);
                 //false_51931639441@c.us_3EB006E196F9002274F8
 
-                const availableNumbers:string[]=JSON.parse(fs.readFileSync('available_numbers.json','utf-8'))
-                const clientNumber=message.from.split('@')[0]
+                const availableNumbers: string[] = JSON.parse(fs.readFileSync('available_numbers.json', 'utf-8'))
+                const clientNumber = message.from.split('@')[0]
 
-                if(availableNumbers.includes(clientNumber)){
-                    await this.axios.post(data.webhook, { sid:message.id.split('_')[2] ,...message});
-                    return 
+                if (availableNumbers.includes(clientNumber)) {
+                    await this.axios.post(data.webhook, { sid: message.id.split('_')[2], ...message });
+                    return
                 }
 
-                if(message.body==='join wpp-onbotgo'){
+                if (message.body === 'join wpp-onbotgo') {
                     availableNumbers.push(clientNumber)
-                    fs.writeFileSync('available_numbers.json',JSON.stringify(availableNumbers))
-                    client.sendText(clientNumber,'Te has unido a wpp-onbotgo')
+                    fs.writeFileSync('available_numbers.json', JSON.stringify(availableNumbers))
+                    client.sendText(clientNumber, 'Te has unido a wpp-onbotgo')
                 }
             }
 
@@ -137,7 +137,7 @@ export class SessionService implements OnModuleDestroy {
 
         client.onAck((ack: Ack) => {
             console.log('ACK CALLBACK DE ' + wid, 'SESSION NAME ' + session, ack);
-            this.axios.put(data.webhook, { sid:ack.id.id,... ack });
+            this.axios.put(data.webhook, { sid: ack.id.id, ...ack });
         });
 
         //client.tokenStore.removeToken('test')
@@ -149,6 +149,34 @@ export class SessionService implements OnModuleDestroy {
             fs.writeFileSync('whatsapp-clients.json', JSON.stringify(saveClients))
         }
         return { data: { id: session, qrCodeBase64 }, success: true, message: 'session creada exitosamente' }
+    }
+
+    async closeClient(data: WhatsappClient): Promise<{ data: any, message: string, success: boolean }> {
+        let client: WhatsappClient
+
+        if (data.wid) client = this.findClientByWid(data.wid)
+        if (data.id) client = this.findClientById(data.id)
+
+        if (!client) {
+            return { data: null, message: 'el cliente no existe o aun no se ha iniciado', success: false }
+        }
+
+        const itClosed=await client.client.close()
+        return { data: itClosed, message: 'el cliente cerrado exitosamente', success: true }
+        
+    }
+
+    async openClient(data: WhatsappClient): Promise<{ data: any, message: string, success: boolean }> {
+        let client: WhatsappClient
+
+        if (data.wid) client = this.findClientByWid(data.wid)
+        if (!data.id) client = this.findClientById(data.id)
+        if (!client) {
+            return { data: null, message: 'el cliente no existe o aun no se ha iniciado', success: false }
+        }
+
+        return await this.createClient(client,false)
+        
     }
 
     findClientById(clientId: string) {
