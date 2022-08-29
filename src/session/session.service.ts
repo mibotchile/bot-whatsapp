@@ -111,6 +111,11 @@ export class SessionService implements OnModuleDestroy {
                 return
             }
 
+            if (message.type === MessageType.E2E_NOTIFICATION) {
+                console.log(message.type);
+                return
+            }
+
             if (message.self === 'in' && wid === message.to.split('@')[0]) {
                 console.log('MENSAJE RECIBIDO', message);
 
