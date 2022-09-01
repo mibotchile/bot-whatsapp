@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as fs from 'node:fs';
+import * as cors from 'cors'
+
 
 async function bootstrap() {
     const appOptions = {} as any;
@@ -11,7 +13,9 @@ async function bootstrap() {
             cert: fs.readFileSync(process.env.SSL_CERT),
         };
     }
-    const app2 = await NestFactory.create(AppModule);
-    await app2.listen(process.env.PORT);
+
+    const app = await NestFactory.create(AppModule);
+    app.use(cors({ credentials: true, origin: true }))
+    await app.listen(process.env.PORT);
 }
 bootstrap();
