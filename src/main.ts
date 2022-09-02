@@ -14,7 +14,7 @@ async function bootstrap() {
         };
     }
 
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create(AppModule,appOptions);
     app.use(cors({ credentials: true, origin: true }))
     await app.listen(process.env.PORT);
 }
