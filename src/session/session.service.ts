@@ -11,6 +11,7 @@ import * as fs from 'node:fs';
 import axios, { Axios } from 'axios';
 import * as https from 'node:https';
 import { ScrapQrcode } from '@wppconnect-team/wppconnect/dist/api/model/qrcode';
+import { RabbitMQService } from 'src/rabbit-mq/rabbit-mq.service';
 
 interface WhatsappSession {
     id?: string;
@@ -24,12 +25,14 @@ interface WhatsappSession {
 export class SessionService implements OnModuleDestroy {
     private axios: Axios;
     private sessions: WhatsappSession[] = [];
-    private availableNumbers: string[] = ['51938432015'];
+    private availableNumbers: string[] = [];
     private qrCodeSessions: Array<ScrapQrcode & { sessionId: string }> = [];
     private onMessageEvents: { [key: string]: { dispose: () => void } } = {}
     private onAckEvents: { [key: string]: { dispose: () => void } } = {}
 
-    constructor() {
+    constructor(
+        private rabbitMQService: RabbitMQService
+    ) {
         console.log('NEW SESSION SERVICE');
 
         if (fs.existsSync('whatsapp-clients.json')) {
@@ -45,6 +48,7 @@ export class SessionService implements OnModuleDestroy {
             httpsAgent: new https.Agent({ rejectUnauthorized: false }),
         });
     }
+
 
     private async init() {
         for (const session of this.sessions) {
@@ -89,9 +93,11 @@ export class SessionService implements OnModuleDestroy {
     }
 
     private async createClient(id: string = null): Promise<{ data: any; message: string; success: boolean }> {
+
         if (this.sessions.length === 5) {
             return { data: [], success: false, message: 'No se puede crear mas de 5 sessiones' };
         }
+
         const sessionId = id ?? this.uid();
         const session = this.findById(sessionId);
 
@@ -118,6 +124,11 @@ export class SessionService implements OnModuleDestroy {
 
                 const sessionIndex = this.sessions.findIndex((s) => s.id === sessionId);
                 this.sessions[sessionIndex].state = statusSession as StatusFind;
+                //this.rabbitMQService.emitEvent(process.env.RABBIT_QUEUE, 'whatsapp_change_status_channel', { session, statusSession })
+
+                if (StatusFind.desconnectedMobile === statusSession) {
+                    this.rabbitMQService.emitEvent(process.env.RABBIT_QUEUE, 'whatsapp_disconected_mobile', { session: this.sessions[sessionIndex] })
+                }
 
                 if (['autocloseCalled', 'notLogged', 'browserClose', 'serverClose', 'qrReadError', 'desconnectedMobile'].includes(statusSession)) {
                     const qrCodeIndex = this.qrCodeSessions.findIndex((qrc) => qrc.sessionId === sessionId);
@@ -154,12 +165,10 @@ export class SessionService implements OnModuleDestroy {
                         ).split('@')[0];
                         this.updateWebhook(sessionId, this.sessions[sessionIndex].webhook)
                     }
-
-
                 }
             },
             puppeteerOptions: {}, // is nessessary for mutiple sessions
-            browserArgs:[
+            browserArgs: [
                 "--disable-web-security",
                 "--no-sandbox",
                 "--disable-web-security",
@@ -181,7 +190,7 @@ export class SessionService implements OnModuleDestroy {
                 "--ignore-certificate-errors",
                 "--ignore-ssl-errors",
                 "--ignore-certificate-errors-spki-list"
-              ],
+            ],
             autoClose: 300000,
             logQR: false,
             disableWelcome: true, // Option to disable the welcoming message which appears in the beginning
@@ -225,7 +234,7 @@ export class SessionService implements OnModuleDestroy {
             }
 
             if (message.self === 'in' && wid === message.to.split('@')[0]) {
-                console.log('MENSAJE RECIBIDO', message);
+                console.log('MENSAJE RECIBIDO');
 
                 const clientNumber = message.from.split('@')[0];
 
