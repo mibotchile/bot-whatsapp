@@ -18,7 +18,7 @@ interface WhatsappSession {
     wid?: string;
     whatsapp?: Whatsapp;
     webhook?: string;
-    state?: StatusFind;
+    state?: string;
 }
 
 @Injectable()
@@ -52,8 +52,18 @@ export class SessionService implements OnModuleDestroy {
 
     private async init() {
         for (const session of this.sessions) {
+            if (!session.wid) {
+                await this.deleteSession(session.id)
+                continue
+            }
             await this.createClient(session.id);
         }
+    }
+
+
+    changeSessionState(sessionId: string, state: string) {
+        const sessionIndex = this.sessions.findIndex((s) => s.id === sessionId);
+        this.sessions[sessionIndex].state = state
     }
 
     uid(): string {
@@ -92,13 +102,13 @@ export class SessionService implements OnModuleDestroy {
         return this.sessions.find((s) => s.id === sessionId);
     }
 
-    private async createClient(id: string = null): Promise<{ data: any; message: string; success: boolean }> {
+    private async createClient(id: string): Promise<{ data: any; message: string; success: boolean }> {
 
         if (this.sessions.length === 5) {
             return { data: [], success: false, message: 'No se puede crear mas de 5 sessiones' };
         }
 
-        const sessionId = id ?? this.uid();
+        const sessionId = id
         const session = this.findById(sessionId);
 
         if (!session) {
@@ -123,11 +133,15 @@ export class SessionService implements OnModuleDestroy {
                 console.log('Session name: ', session, '\nStatus Session: ', statusSession); //return isLogged || notLogged || browserClose || qrReadSuccess || qrReadFail || autocloseCalled || desconnectedMobile || deleteToken
 
                 const sessionIndex = this.sessions.findIndex((s) => s.id === sessionId);
-                this.sessions[sessionIndex].state = statusSession as StatusFind;
+
                 //this.rabbitMQService.emitEvent(process.env.RABBIT_QUEUE, 'whatsapp_change_status_channel', { session, statusSession })
 
                 if (StatusFind.desconnectedMobile === statusSession) {
-                    this.rabbitMQService.emitEvent(process.env.RABBIT_QUEUE, 'whatsapp_disconected_mobile', { session: this.sessions[sessionIndex] })
+                    const dataSendToRabbit = {
+                        id: sessionId,
+                        wid: this.sessions[sessionIndex].wid
+                    }
+                    this.rabbitMQService.emitEvent(process.env.RABBIT_QUEUE, 'whatsapp_disconected_mobile', { session: dataSendToRabbit })
                 }
 
                 if (['autocloseCalled', 'notLogged', 'browserClose', 'serverClose', 'qrReadError', 'desconnectedMobile'].includes(statusSession)) {
@@ -147,25 +161,43 @@ export class SessionService implements OnModuleDestroy {
                 }
 
                 if (statusSession === 'inChat') {
-                    if (!this.sessions[sessionIndex].whatsapp) {
 
-                        const interval = setInterval(async () => {
-                            if (this.sessions[sessionIndex].whatsapp) {
-                                this.sessions[sessionIndex].wid = (
-                                    await this.sessions[sessionIndex].whatsapp.getWid()
-                                ).split('@')[0];
-                                this.updateWebhook(sessionId, this.sessions[sessionIndex].webhook)
-                                this.updateClientsFileRepo()
-                                clearInterval(interval);
+                    // await new Promise(async (resolve, _reject) => {
+
+                    const interval = setInterval(async () => {
+                        console.log('NUEVO INTENTO PARA OBTENER EL WID')
+                        if (!this.sessions[sessionIndex].whatsapp) return
+
+                        const wid = (await this.sessions[sessionIndex].whatsapp.getWid()).split('@')[0]
+                        this.sessions[sessionIndex].wid = wid;
+
+
+                        if (this.sessions.filter(s => s.wid === wid).length > 1) {
+                            console.log('SESIONS DUPLICADA ');
+                            console.log('CERRANDO SESSION ....');
+                            const { success } = await this.logout(this.sessions[sessionIndex])
+
+                            if (success) {
+                                console.log('SESION CERRADA EXITOSAMENTE');
                             }
-                        }, 1000);
-                    } else {
-                        this.sessions[sessionIndex].wid = (
-                            await this.sessions[sessionIndex].whatsapp.getWid()
-                        ).split('@')[0];
-                        this.updateWebhook(sessionId, this.sessions[sessionIndex].webhook)
-                    }
+
+                            clearInterval(interval);
+                            this.sessions[sessionIndex].state = 'duplicated'
+                            return
+                        }
+
+                        console.log('WID OBTENIDO', wid)
+
+                        this.updateWebhook(sessionId, `${process.env.HOST_WEBHOOK}/webhook/${sessionId}`)
+                        clearInterval(interval);
+                        this.sessions[sessionIndex].state = 'inChat'
+
+
+                    }, 1000);
+
                 }
+
+
             },
             puppeteerOptions: {}, // is nessessary for mutiple sessions
             browserArgs: [
@@ -304,19 +336,43 @@ export class SessionService implements OnModuleDestroy {
         return { data: itLogout, message: 'Session cerrada exitosamente', success: true };
     }
 
-    async getQrCode(): Promise<{ data: any; message: string; success: boolean }> {
-        let qrCode = this.qrCodeSessions[0];
+
+    async deleteSession(sessionId: string) {
+        const sessionIndex = this.sessions.findIndex((s) => s.id === sessionId);
+        if (sessionIndex === -1) return true
+        if (this.sessions[sessionIndex].whatsapp) {
+            await this.sessions[sessionIndex].whatsapp.tokenStore.removeToken(sessionId)
+        }
+        if (fs.existsSync(`tokens/${sessionId}`)) {
+            fs.rmSync(`tokens/${sessionId}`, { recursive: true, force: true })
+        }
+        this.sessions.splice(sessionIndex, 1)
+        this.updateClientsFileRepo()
+        return true
+
+    }
+
+    async getQrCode(sessionId: string | undefined): Promise<{ data: any; message: string; success: boolean }> {
+        let qrCode = this.qrCodeSessions.find(qr => qr.sessionId === sessionId)
 
         if (qrCode) return { data: qrCode, message: 'QR', success: true };
-        const session = this.sessions.find((s) => ['autocloseCalled', 'notLogged', 'qrReadError'].includes(s.state));
+        const uid = this.uid()
 
-        if (session) this.createClient(session.id);
-        else this.createClient();
+        if (!sessionId) {
+            setTimeout(async () => {
+                const qrIndex = this.qrCodeSessions.findIndex(qr => qr.sessionId === uid)
+                this.qrCodeSessions.splice(qrIndex, 1)
+                await this.deleteSession(uid)
+            }, 600000)
+        }
+        sessionId = sessionId ?? uid
+
+        this.createClient(sessionId);
 
         await new Promise((resolve) => {
             const interval = setInterval(() => {
-                if (this.qrCodeSessions[0]) {
-                    qrCode = this.qrCodeSessions[0];
+                qrCode = this.qrCodeSessions.find(qr => qr.sessionId === sessionId)
+                if (qrCode) {
                     clearInterval(interval);
                     resolve(true);
                 }

@@ -141,3 +141,5 @@ requests/
 
 package-lock.json
 available_numbers.json
+
+filesDownload/

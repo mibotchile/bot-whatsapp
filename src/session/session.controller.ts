@@ -1,4 +1,4 @@
-import { Body, Controller, Put, HttpException, HttpStatus, Get, Param } from '@nestjs/common';
+import { Body, Controller, Put, HttpException, HttpStatus, Get, Param, Query } from '@nestjs/common';
 import { SessionService } from './session.service';
 
 @Controller('session')
@@ -11,32 +11,49 @@ export class SessionController {
     }
 
     @Get('qrCode')
-    async getQr() {
-        return this.sessionService.getQrCode()
+    async getQr(@Query() { sessionId }: { sessionId: string | undefined }) {
+        sessionId = sessionId === 'undefined' ? undefined : sessionId
+        return this.sessionService.getQrCode(sessionId)
     }
 
     @Get('id/:sessionId')
     findById(@Param('sessionId') sessionId: string) {
         const session = this.sessionService.findById(sessionId)
-        if(!session){
-            throw new HttpException({message:'No existe session con este id'}, HttpStatus.NOT_ACCEPTABLE)
+        if (!session) {
+            throw new HttpException({ message: 'No existe session con este id' }, HttpStatus.NOT_ACCEPTABLE)
         }
+
+        const sessionState =session.state
+
+        if (session.state === 'duplicated') {
+            this.sessionService.changeSessionState(session.id, 'notLogged')
+        }
+
         return {
             id: session.id,
             wid: session.wid,
             webhook: session.webhook,
-            state: session.state
+            state: sessionState
         }
     }
 
     @Get('wid/:wid')
     findByWid(@Param('wid') wid: string) {
         const session = this.sessionService.findByWid(wid)
+        if (!session) {
+            throw new HttpException({ message: 'No existe session con este id' }, HttpStatus.NOT_ACCEPTABLE)
+        }
+        const sessionState =session.state
+
+        if (session.state === 'duplicated') {
+            this.sessionService.changeSessionState(session.id, 'notLogged')
+        }
+
         return {
             id: session.id,
             wid: session.wid,
             webhook: session.webhook,
-            state: session.state
+            state: sessionState
         }
     }
 
