@@ -52,6 +52,8 @@ export class SessionService implements OnModuleDestroy {
 
     private async init() {
         for (const session of this.sessions) {
+            console.log(session);
+
             if (!session.wid) {
                 await this.deleteSession(session.id)
                 continue
@@ -137,11 +139,16 @@ export class SessionService implements OnModuleDestroy {
                 //this.rabbitMQService.emitEvent(process.env.RABBIT_QUEUE, 'whatsapp_change_status_channel', { session, statusSession })
 
                 if (StatusFind.desconnectedMobile === statusSession) {
-                    const dataSendToRabbit = {
-                        id: sessionId,
-                        wid: this.sessions[sessionIndex].wid
+                    this.deleteSession(sessionId)
+                    if (this.sessions[sessionIndex].wid) {
+                        const dataSendToRabbit = {
+                            id: sessionId,
+                            wid: this.sessions[sessionIndex].wid
+                        }
+
+                        this.rabbitMQService.emitEvent(process.env.RABBIT_QUEUE, 'whatsapp_disconected_mobile', { session: dataSendToRabbit })
                     }
-                    this.rabbitMQService.emitEvent(process.env.RABBIT_QUEUE, 'whatsapp_disconected_mobile', { session: dataSendToRabbit })
+
                 }
 
                 if (['autocloseCalled', 'notLogged', 'browserClose', 'serverClose', 'qrReadError', 'desconnectedMobile'].includes(statusSession)) {
