@@ -150,8 +150,8 @@ export class SessionService implements OnModuleDestroy {
                     this.deleteSession(sessionId)
                 }
 
-                if (['autocloseCalled','browserClose', 'serverClose'].includes(statusSession)) {
-                // if (['autocloseCalled', 'notLogged', 'browserClose', 'serverClose', 'qrReadError', 'desconnectedMobile'].includes(statusSession)) {
+                if (['autocloseCalled', 'browserClose', 'serverClose'].includes(statusSession)) {
+                    // if (['autocloseCalled', 'notLogged', 'browserClose', 'serverClose', 'qrReadError', 'desconnectedMobile'].includes(statusSession)) {
                     const qrCodeIndex = this.qrCodeSessions.findIndex((qrc) => qrc.sessionId === sessionId);
                     if (qrCodeIndex !== -1) {
                         this.qrCodeSessions.splice(qrCodeIndex, 1);
@@ -368,6 +368,8 @@ export class SessionService implements OnModuleDestroy {
 
         if (!sessionId) {
             setTimeout(async () => {
+                const session = this.findById(sessionId)
+                if (session && ![undefined, 'undefined', null,''].includes(session.wid)) return
                 const qrIndex = this.qrCodeSessions.findIndex(qr => qr.sessionId === uid)
                 this.qrCodeSessions.splice(qrIndex, 1)
                 await this.deleteSession(uid)

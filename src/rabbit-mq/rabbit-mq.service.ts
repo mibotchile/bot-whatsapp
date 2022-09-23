@@ -14,7 +14,7 @@ export class RabbitMQService implements OnModuleInit {
         //await this.channel.assertExchange(exchange, 'direct', { durable: true }).catch(console.error)
     }
 
-    async emitEvent(queue: string, pattern: string, data: any) {
+    emitEvent(queue: string, pattern: string, data: any) {
         //{"pattern":"whatsapp_test_event","data":{"name":"hsjjk","jjj":"a5456"}}
         const content = JSON.stringify({ pattern, data })
         console.log('CONTENT',content);
