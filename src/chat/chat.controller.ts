@@ -1,12 +1,16 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Delete } from '@nestjs/common';
 import { ChatService } from './chat.service';
 
 @Controller('chat')
 export class ChatController {
     constructor(private readonly chatService: ChatService) { }
 
-    @Post()
+    @Delete()
     async sendtextChat(@Body() data: any) {
-        return await this.chatService.remove(data)
+        console.log('eliminando chat');
+        const response=await this.chatService.remove(data)
+        console.log('[RESPONSE]',response);
+
+        return response
     }
 }
