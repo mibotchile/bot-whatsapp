@@ -139,7 +139,6 @@ export class SessionService implements OnModuleDestroy {
                 //this.rabbitMQService.emitEvent(process.env.RABBIT_QUEUE, 'whatsapp_change_status_channel', { session, statusSession })
 
                 if (StatusFind.desconnectedMobile === statusSession) {
-                    this.deleteSession(sessionId)
                     if (this.sessions[sessionIndex].wid) {
                         const dataSendToRabbit = {
                             id: sessionId,
@@ -148,16 +147,16 @@ export class SessionService implements OnModuleDestroy {
 
                         this.rabbitMQService.emitEvent(process.env.RABBIT_QUEUE, 'whatsapp_disconected_mobile', { session: dataSendToRabbit })
                     }
-
+                    this.deleteSession(sessionId)
                 }
 
-                if (['autocloseCalled', 'notLogged', 'browserClose', 'serverClose', 'qrReadError', 'desconnectedMobile'].includes(statusSession)) {
+                if (['autocloseCalled','browserClose', 'serverClose'].includes(statusSession)) {
+                // if (['autocloseCalled', 'notLogged', 'browserClose', 'serverClose', 'qrReadError', 'desconnectedMobile'].includes(statusSession)) {
                     const qrCodeIndex = this.qrCodeSessions.findIndex((qrc) => qrc.sessionId === sessionId);
                     if (qrCodeIndex !== -1) {
                         this.qrCodeSessions.splice(qrCodeIndex, 1);
                     }
-                    this.sessions[sessionIndex].wid = null;
-                    this.sessions[sessionIndex].webhook = null;
+                    this.deleteSession(sessionId)
                 }
 
                 if ([StatusFind.inChat, StatusFind.isLogged].includes(statusSession as StatusFind)) {
@@ -231,7 +230,7 @@ export class SessionService implements OnModuleDestroy {
                 "--ignore-certificate-errors-spki-list"
             ],
             autoClose: 300000,
-            logQR: false,
+            logQR: true,
             disableWelcome: true, // Option to disable the welcoming message which appears in the beginning
             tokenStore: 'file', // Define how work with tokens, that can be a custom interface
             folderNameToken: './tokens', //folder name when saving tokens
@@ -348,6 +347,8 @@ export class SessionService implements OnModuleDestroy {
         const sessionIndex = this.sessions.findIndex((s) => s.id === sessionId);
         if (sessionIndex === -1) return true
         if (this.sessions[sessionIndex].whatsapp) {
+            await this.sessions[sessionIndex].whatsapp.close();
+
             await this.sessions[sessionIndex].whatsapp.tokenStore.removeToken(sessionId)
         }
         if (fs.existsSync(`tokens/${sessionId}`)) {

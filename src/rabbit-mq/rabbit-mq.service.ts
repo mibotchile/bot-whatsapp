@@ -16,7 +16,10 @@ export class RabbitMQService implements OnModuleInit {
 
     async emitEvent(queue: string, pattern: string, data: any) {
         //{"pattern":"whatsapp_test_event","data":{"name":"hsjjk","jjj":"a5456"}}
-        const content = { pattern, data }
-        return this.channel.sendToQueue(queue, Buffer.from(JSON.stringify(content)))
+        const content = JSON.stringify({ pattern, data })
+        console.log('CONTENT',content);
+
+
+        return this.channel.sendToQueue(queue, Buffer.from(content))
     }
 }
