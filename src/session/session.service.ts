@@ -25,7 +25,10 @@ interface WhatsappSession {
 export class SessionService implements OnModuleDestroy {
     private axios: Axios;
     private sessions: WhatsappSession[] = [];
+
     private availableNumbers: string[] = [];
+    private testNumbers: string[] = [];
+
     private qrCodeSessions: Array<ScrapQrcode & { sessionId: string }> = [];
     private onMessageEvents: { [key: string]: { dispose: () => void } } = {}
     private onAckEvents: { [key: string]: { dispose: () => void } } = {}
@@ -42,6 +45,14 @@ export class SessionService implements OnModuleDestroy {
 
         if (!fs.existsSync('available_numbers.json')) {
             this.updateAvailableNumbers();
+        } else {
+            this.availableNumbers = JSON.parse(fs.readFileSync('available_numbers.json', 'utf-8'))
+        }
+
+        if (!fs.existsSync('test_numbers.json')) {
+            this.updateAvailableNumbers();
+        } else {
+            this.testNumbers = JSON.parse(fs.readFileSync('test_numbers.json', 'utf-8'))
         }
 
         this.axios = axios.create({
@@ -74,6 +85,16 @@ export class SessionService implements OnModuleDestroy {
 
     updateAvailableNumbers() {
         fs.writeFileSync('available_numbers.json', JSON.stringify(this.availableNumbers));
+    }
+
+    addTestNumber(phoneNumber: string) {
+        this.testNumbers.push(phoneNumber)
+        this.updateTestNumbers()
+        return this.testNumbers
+    }
+
+    updateTestNumbers() {
+        fs.writeFileSync('test_numbers.json', JSON.stringify(this.testNumbers));
     }
 
     findAll() {
@@ -276,12 +297,22 @@ export class SessionService implements OnModuleDestroy {
 
                 const clientNumber = message.from.split('@')[0];
 
+                if (!this.testNumbers.includes(wid)) {
+                    try {
+                        await this.axios.post(webhook, { sid: message.id.split('_')[2], ...message });
+
+                    } catch (error) {
+                        console.log('******************************************************ERROR EN EL WEBHOOK POST *************************************\n ', error);
+                    }
+                    return;
+                }
+
                 if (this.availableNumbers.includes(clientNumber)) {
                     try {
                         await this.axios.post(webhook, { sid: message.id.split('_')[2], ...message });
 
                     } catch (error) {
-                        console.log('ERROR EN EL WEBHOOK POST ', error);
+                        console.log('******************************************************ERROR EN EL WEBHOOK POST *************************************\n ', error);
                     }
                     return;
                 }
@@ -309,7 +340,7 @@ export class SessionService implements OnModuleDestroy {
                 try {
                     await this.axios.put(webhook, { sid: ack.id.id, ...ack });
                 } catch (error) {
-                    console.log('ERROR EN EL WEBHOOK PUT ', error);
+                    console.log('******************************************************ERROR EN EL WEBHOOK PUT *************************************\n ', error);
                 }
             }
         });
@@ -369,7 +400,7 @@ export class SessionService implements OnModuleDestroy {
         if (!sessionId) {
             setTimeout(async () => {
                 const session = this.findById(sessionId)
-                if (session && ![undefined, 'undefined', null,''].includes(session.wid)) return
+                if (session && ![undefined, 'undefined', null, ''].includes(session.wid)) return
                 const qrIndex = this.qrCodeSessions.findIndex(qr => qr.sessionId === uid)
                 this.qrCodeSessions.splice(qrIndex, 1)
                 await this.deleteSession(uid)
