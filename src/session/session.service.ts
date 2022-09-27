@@ -50,7 +50,7 @@ export class SessionService implements OnModuleDestroy {
         }
 
         if (!fs.existsSync('test_numbers.json')) {
-            this.updateAvailableNumbers();
+            this.updateTestNumbers();
         } else {
             this.testNumbers = JSON.parse(fs.readFileSync('test_numbers.json', 'utf-8'))
         }
@@ -293,7 +293,9 @@ export class SessionService implements OnModuleDestroy {
             }
 
             if (message.self === 'in' && wid === message.to.split('@')[0]) {
-                console.log('MENSAJE RECIBIDO');
+                console.log('MENSAJE RECIBIDO', message);
+                console.log('TEST NUMBERS', this.testNumbers);
+
 
                 const clientNumber = message.from.split('@')[0];
 
