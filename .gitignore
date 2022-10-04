@@ -141,5 +141,6 @@ requests/
 
 package-lock.json
 available_numbers.json
-
 filesDownload/
+src/configs/gcp/*.json
+test_numbers.json
