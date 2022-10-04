@@ -57,38 +57,6 @@ export class SessionController {
         }
     }
 
-    // @Put('forceRefreshQrCode')
-    // async forceRefreshQrCode() {
-    //     return this.sessionService.getQrCode()
-    // }
-
-    @Put('start') //esto inicia o reinicia la instancia de chrome
-    async restart(@Body() data: any) {
-        const res = await this.sessionService.startClient(data)
-        if (!res.success) {
-            throw new HttpException(res, HttpStatus.NOT_ACCEPTABLE)
-        }
-        return res
-    }
-
-    @Put('shutdown') //esto cierra la instancia de chrome
-    async close(@Body() data: any) {
-        const res = await this.sessionService.closeClient(data)
-        if (!res.success) {
-            throw new HttpException(res, HttpStatus.NOT_ACCEPTABLE)
-        }
-        return res
-    }
-
-    @Put('logout')
-    async logout(@Body() data: any) {// esto cierra la session o desvincula el dispositivo
-        const res = await this.sessionService.logout(data)
-        if (!res.success) {
-            throw new HttpException(res, HttpStatus.NOT_ACCEPTABLE)
-        }
-        return res
-    }
-
     @Put('webhook')
     async changeWebhook(@Body() data: any) {
         const res = this.sessionService.updateWebhook(data.id, data.webhook)

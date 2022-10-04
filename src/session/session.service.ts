@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
     Ack,
     create,
@@ -12,17 +12,17 @@ import axios, { Axios } from 'axios';
 import * as https from 'node:https';
 import { ScrapQrcode } from '@wppconnect-team/wppconnect/dist/api/model/qrcode';
 import { RabbitMQService } from 'src/rabbit-mq/rabbit-mq.service';
-
-interface WhatsappSession {
-    id?: string;
-    wid?: string;
-    whatsapp?: Whatsapp;
-    webhook?: string;
-    state?: string;
-}
-
+import { uuid } from 'src/utils/uuid';
+import { GCPStorageService } from 'src/gcp-storage/gcp-storage.service';
+import { buildUploadPath } from 'src/utils/uploadName';
+import { InjectRepository } from '@nestjs/typeorm';
+import { ChannelMap } from 'src/channel-map/channel-map.entity';
+import { Repository } from 'typeorm';
+import { buildBucketName } from 'src/utils/bucketName';
+import { WhatsappSession } from 'src/app.types';
+import { blue, textHex, textRgb } from 'src/utils/cli-color';
 @Injectable()
-export class SessionService implements OnModuleDestroy {
+export class SessionService implements OnModuleDestroy, OnModuleInit {
     private axios: Axios;
     private sessions: WhatsappSession[] = [];
 
@@ -34,13 +34,30 @@ export class SessionService implements OnModuleDestroy {
     private onAckEvents: { [key: string]: { dispose: () => void } } = {}
 
     constructor(
-        private rabbitMQService: RabbitMQService
+        private rabbitMQService: RabbitMQService,
+        private gcpStorage: GCPStorageService,
+        @InjectRepository(ChannelMap) private channelMapRepo: Repository<ChannelMap>
     ) {
-        console.log('NEW SESSION SERVICE');
+
+        console.log('SESSION SERVICE INSTANCIATED');
+
+        this.axios = axios.create({
+            httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        });
+    }
+
+    async onModuleInit() {
 
         if (fs.existsSync('whatsapp-clients.json')) {
             this.sessions = JSON.parse(fs.readFileSync('whatsapp-clients.json', 'utf-8'))
-            this.init();
+            for (const session of this.sessions) {
+                console.log(session);
+                if (!session.wid) {
+                    await this.deleteSession(session.id)
+                    continue
+                }
+                await this.createClient(session.id);
+            }
         }
 
         if (!fs.existsSync('available_numbers.json')) {
@@ -55,32 +72,15 @@ export class SessionService implements OnModuleDestroy {
             this.testNumbers = JSON.parse(fs.readFileSync('test_numbers.json', 'utf-8'))
         }
 
-        this.axios = axios.create({
-            httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-        });
-    }
-
-
-    private async init() {
-        for (const session of this.sessions) {
-            console.log(session);
-
-            if (!session.wid) {
-                await this.deleteSession(session.id)
-                continue
-            }
-            await this.createClient(session.id);
+        if (!fs.existsSync('filesDownload/')) {
+            fs.mkdirSync('filesDownload/')
         }
-    }
 
+    }
 
     changeSessionState(sessionId: string, state: string) {
         const sessionIndex = this.sessions.findIndex((s) => s.id === sessionId);
         this.sessions[sessionIndex].state = state
-    }
-
-    uid(): string {
-        return (Date.now() + Math.random() * 10000).toString(36).replace('.', '');
     }
 
     updateAvailableNumbers() {
@@ -153,7 +153,7 @@ export class SessionService implements OnModuleDestroy {
             },
 
             statusFind: async (statusSession, session) => {
-                console.log('Session name: ', session, '\nStatus Session: ', statusSession); //return isLogged || notLogged || browserClose || qrReadSuccess || qrReadFail || autocloseCalled || desconnectedMobile || deleteToken
+                console.log(blue('', `SESSION: [NAME => ${session}] [STATUS => ${statusSession}`)); //return isLogged || notLogged || browserClose || qrReadSuccess || qrReadFail || autocloseCalled || desconnectedMobile || deleteToken
 
                 const sessionIndex = this.sessions.findIndex((s) => s.id === sessionId);
 
@@ -171,7 +171,7 @@ export class SessionService implements OnModuleDestroy {
                     this.deleteSession(sessionId)
                 }
 
-                if (['autocloseCalled', 'browserClose', 'serverClose'].includes(statusSession)) {
+                if (['autocloseCalled', 'serverClose'].includes(statusSession)) {
                     // if (['autocloseCalled', 'notLogged', 'browserClose', 'serverClose', 'qrReadError', 'desconnectedMobile'].includes(statusSession)) {
                     const qrCodeIndex = this.qrCodeSessions.findIndex((qrc) => qrc.sessionId === sessionId);
                     if (qrCodeIndex !== -1) {
@@ -251,7 +251,7 @@ export class SessionService implements OnModuleDestroy {
                 "--ignore-certificate-errors-spki-list"
             ],
             autoClose: 300000,
-            logQR: true,
+            logQR: false,
             disableWelcome: true, // Option to disable the welcoming message which appears in the beginning
             tokenStore: 'file', // Define how work with tokens, that can be a custom interface
             folderNameToken: './tokens', //folder name when saving tokens
@@ -271,47 +271,27 @@ export class SessionService implements OnModuleDestroy {
         }
 
         this.onMessageEvents[sessionId] = whatsapp.onMessage(async (message: Message) => {
-            console.log('CALLBACK DE ' + wid);
-            if (message.isGroupMsg) {
-                console.log('Mensaje de grupo', message.body);
-                return;
-            }
+            console.log('--------------------------------------------------------NUEVO MENSAJE----------------------------------------------');
+            console.log(message.body.slice(0, 100));
 
-            if (message.from === 'status@broadcast') {
-                console.log('STATUS IGNORED', message.sender);
-                return;
-            }
+            if (message.isGroupMsg) return
+            if (message.from === 'status@broadcast') return
 
-            if (message.type === MessageType.STICKER) {
-                console.log('STIKER');
-                return;
-            }
+            const acceptedTypes = [MessageType.PTT, MessageType.IMAGE, MessageType.DOCUMENT, MessageType.VIDEO, MessageType.AUDIO, MessageType.CHAT]
 
-            if (message.type === MessageType.E2E_NOTIFICATION) {
-                console.log(message.type);
-                return;
-            }
+            if (!acceptedTypes.includes(message.type)) return
+            // if (message.self !== 'in' || wid !== message.to.split('@')[0])
 
-            if (message.self === 'in' && wid === message.to.split('@')[0]) {
-                console.log('MENSAJE RECIBIDO', message);
-                console.log('TEST NUMBERS', this.testNumbers);
+            const clientNumber = message.from.split('@')[0];
+            console.log('TEST NUMBERS', this.testNumbers);
 
+            //if (this.testNumbers.includes(wid) && this.availableNumbers.includes(clientNumber) )
 
-                const clientNumber = message.from.split('@')[0];
+            if (MessageType.CHAT === message.type) {
 
-                if (!this.testNumbers.includes(wid)) {
+                if (!this.testNumbers.includes(wid) || this.availableNumbers.includes(clientNumber)) {
                     try {
-                        await this.axios.post(webhook, { sid: message.id.split('_')[2], ...message });
-
-                    } catch (error) {
-                        console.log('******************************************************ERROR EN EL WEBHOOK POST *************************************\n ', error);
-                    }
-                    return;
-                }
-
-                if (this.availableNumbers.includes(clientNumber)) {
-                    try {
-                        await this.axios.post(webhook, { sid: message.id.split('_')[2], ...message });
+                        await this.axios.post(webhook, { sid: message.id.split('_')[2], mediaUrl: '', ...message });
 
                     } catch (error) {
                         console.log('******************************************************ERROR EN EL WEBHOOK POST *************************************\n ', error);
@@ -324,8 +304,37 @@ export class SessionService implements OnModuleDestroy {
                     this.updateAvailableNumbers();
                     whatsapp.sendText(clientNumber, 'Te has unido a wpp-onbotgo');
                 }
+                return
+            }
+
+            const { filePath, fileName } = await this.donwloadAndSaveFile(whatsapp, message)
+            const channelMap = await this.channelMapRepo.findOne({ where: { channel_number: wid } })
+            const bucketName = buildBucketName(channelMap.client_uid)
+            const fileMetadata = await this.gcpStorage.uploadFile(bucketName, filePath, buildUploadPath(fileName))
+            const mediaUrl = fileMetadata.publicUrl()
+
+            try {
+                await this.axios.post(webhook, { sid: message.id.split('_')[2], mediaUrl, ...message });
+            } catch (error) {
+                console.log('******************************************************ERROR EN EL WEBHOOK POST *************************************\n ', error);
             }
         });
+    }
+
+    async donwloadAndSaveFile(whatsapp: Whatsapp, message: Message & { filename?: string }) {
+        const [metadata, base64] = (await whatsapp.downloadMedia(message)).split(',');  // data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAYGB
+        console.log(metadata, base64.slice(0, 20), '...');
+        //const mimeType = metadata.replace('data:', '').replace(';base64', '')
+        const buffer = Buffer.from(base64, 'base64')
+
+        //const { ext, mime } = await FileType.fromBuffer(buffer)
+        const mime = message.mimetype
+        const ext = mime === 'image/jpeg' ? 'jpg' : message.filename.split('.').pop()
+
+        const fileName = (message.filename ?? `${message.notifyName}.${ext}`).replace(`.${ext}`, `_${uuid()}.${ext}`)
+        const filePath = `filesDownload/${fileName}`
+        fs.writeFileSync(filePath, buffer);
+        return { fileName, filePath }
     }
 
     registerOnAckCallback(sessionId: string) {
@@ -338,7 +347,7 @@ export class SessionService implements OnModuleDestroy {
 
         this.onAckEvents[sessionId] = whatsapp.onAck(async (ack: Ack) => {
             if (ack.self === 'out' && wid === ack.from.split('@')[0]) {
-                console.log('ACK ' + wid, ack);
+                console.log('ACK ' + wid, ack.type);
                 try {
                     await this.axios.put(webhook, { sid: ack.id.id, ...ack });
                 } catch (error) {
@@ -377,11 +386,12 @@ export class SessionService implements OnModuleDestroy {
 
 
     async deleteSession(sessionId: string) {
+        console.log(textHex('EF596F', 'ELIMINANDO SESSION => ', sessionId));
+
         const sessionIndex = this.sessions.findIndex((s) => s.id === sessionId);
         if (sessionIndex === -1) return true
         if (this.sessions[sessionIndex].whatsapp) {
             await this.sessions[sessionIndex].whatsapp.close();
-
             await this.sessions[sessionIndex].whatsapp.tokenStore.removeToken(sessionId)
         }
         if (fs.existsSync(`tokens/${sessionId}`)) {
@@ -397,7 +407,7 @@ export class SessionService implements OnModuleDestroy {
         let qrCode = this.qrCodeSessions.find(qr => qr.sessionId === sessionId)
 
         if (qrCode) return { data: qrCode, message: 'QR', success: true };
-        const uid = this.uid()
+        const uid = uuid()
 
         if (!sessionId) {
             setTimeout(async () => {
