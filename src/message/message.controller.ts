@@ -5,10 +5,15 @@ import { MessageService } from './message.service';
 export class MessageController {
     constructor(private readonly messageService: MessageService) { }
 
-    @Post('send')
+    @Post('sendText')
     async sendtextMessage(@Body() data: any) {
         console.log('DATA RECIBIDA ANTES DE ENVIAR EL MENSAJE', data);
 
-        return await this.messageService.send(data)
+        return await this.messageService.sendText(data)
+    }
+
+    @Post('sendFile')
+    async sendFile(@Body() data: any) {
+        return await this.messageService.sendFile(data)
     }
 }
