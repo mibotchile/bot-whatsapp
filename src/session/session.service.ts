@@ -272,7 +272,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
 
         this.onMessageEvents[sessionId] = whatsapp.onMessage(async (message: Message) => {
             console.log('--------------------------------------------------------NUEVO MENSAJE----------------------------------------------');
-            console.log(message.body.slice(0, 100));
+            console.log(message.body?.slice(0, 100));
 
             if (message.isGroupMsg) return
             if (message.from === 'status@broadcast') return
@@ -306,6 +306,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
                 }
                 return
             }
+            if (this.testNumbers.includes(wid) && !this.availableNumbers.includes(clientNumber)) return
 
             const { filePath, fileName } = await this.donwloadAndSaveFile(whatsapp, message)
             const channelMap = await this.channelMapRepo.findOne({ where: { channel_number: wid } })
