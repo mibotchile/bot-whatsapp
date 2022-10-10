@@ -7,9 +7,9 @@ import { now } from 'src/utils/date';
 export class RequestMiddleware implements NestMiddleware {
 
     use(req: Request, res: any, next: () => void) {
-        const { ip, method, path: url } = req;
+        const { ip, method, originalUrl: url } = req;
         const userAgent = req.get('user-agent') || '';
-        console.log(textHex('ff8000', `[${now()}] ${method}: ${url} - ${userAgent} ${ip}`));
+        console.log(textHex('ff8000', `[${now()}] ${method} : ${url} - ${userAgent} ${ip}`));
         next()
     }
 }
