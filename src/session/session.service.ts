@@ -272,7 +272,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
 
         this.onMessageEvents[sessionId] = whatsapp.onMessage(async (message: Message) => {
             console.log('--------------------------------------------------------NUEVO MENSAJE----------------------------------------------');
-            console.log(message.body?.slice(0, 100));
+            console.log(message.type,message.body?.slice(0, 100));
 
             if (message.isGroupMsg) return
             if (message.from === 'status@broadcast') return
