@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as fs from 'node:fs';
 import * as cors from 'cors'
+import { json, urlencoded } from 'express';
 
 
 async function bootstrap() {
@@ -14,8 +15,10 @@ async function bootstrap() {
         };
     }
 
-    const app = await NestFactory.create(AppModule,appOptions);
+    const app = await NestFactory.create(AppModule, appOptions);
     app.use(cors({ credentials: true, origin: true }))
+    app.use(json({ limit: '50mb' }));
+    app.use(urlencoded({ extended: true, limit: '50mb' }));
     await app.listen(process.env.PORT);
 }
 bootstrap();
