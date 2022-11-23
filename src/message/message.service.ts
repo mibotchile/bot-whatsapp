@@ -37,7 +37,7 @@ export class MessageService {
         const ext = fileName.split('.').pop()
         console.log({ ext });
 
-        const destination = 'filesDownload/' + fileName.replace(`.${ext}`, `_${Date.now}.${ext}`)
+        const destination = 'filesDownload/' + fileName.replace(`.${ext}`, `_${Date.now()}.${ext}`)
         writeFileSync(destination, fileBuffer)
 
         let message: Message

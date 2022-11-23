@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { File, GetFilesOptions, Storage } from '@google-cloud/storage';
 import { BucketRepository } from './buckets-repository';
-import { file } from '@babel/types';
 import { isValidURL } from 'src/utils/url';
 
 @Injectable()
