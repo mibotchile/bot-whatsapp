@@ -17,8 +17,8 @@ async function bootstrap() {
 
     const app = await NestFactory.create(AppModule, appOptions);
     app.use(cors({ credentials: true, origin: true }))
-    app.use(json({ limit: '50mb' }));
-    app.use(urlencoded({ extended: true, limit: '50mb' }));
+    app.use(json({ limit: '100mb' }));
+    app.use(urlencoded({ extended: true, limit: '100mb' }));
     await app.listen(process.env.PORT);
 }
 bootstrap();

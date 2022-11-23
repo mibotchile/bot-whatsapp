@@ -61,7 +61,7 @@ export class MessageService {
 
     private async sendDocument(from: string, to: string, path: string, filename: string) {
         const session = this.sessionService.findByWid(from)
-        const sendResult = await session.whatsapp.sendFile(to + '@c.us', path, { filename })
+        const sendResult = await session.whatsapp.sendFile(to + '@c.us', path, { filename ,type:'document'})
         if (sendResult.sendMsgResult !== 'OK') this.showError('Error al enviar el archivo')
         const message = await session.whatsapp.getMessageById(sendResult.id)
         return message
