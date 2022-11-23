@@ -70,7 +70,7 @@ export class GCPStorageService {
         const destination = (destinationFolder ? `${destinationFolder}/` : '') + fileName
 
         try {
-            console.log('[DESCARGANDO ' + file + ' ... ]');
+            console.log('[DESCARGANDO ' + fileName + ' ... ]');
             const bucket = await this.getBucket(bucketName)
 
             await bucket.file(filePath).download({ destination });
