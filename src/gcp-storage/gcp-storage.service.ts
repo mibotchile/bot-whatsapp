@@ -13,13 +13,22 @@ export class GCPStorageService {
             projectId: process.env.GC_PROJECT_NAME,
         };
         this.storage = new Storage(GCoptions);
-        this.init()
-        //this.bucket=this.storage.bucket('asdasd')
     }
 
-    async init() {
+    async getBuckets() {
         const [buckets] = await this.storage.getBuckets({ prefix: 'wpp_' })
         BucketRepository.buckets = buckets
+    }
+
+    async getBucket(bucketName: string) {
+        if (BucketRepository.buckets.length === 0) {
+            await this.getBuckets()
+        }
+        const bucket = BucketRepository.findByName(bucketName)
+        if (!bucket) {
+            await this.createBucket(bucketName)
+        }
+        return BucketRepository.findByName(bucketName)
     }
 
     async getFiles(bucketName: string, query?: GetFilesOptions) {
@@ -35,13 +44,7 @@ export class GCPStorageService {
         BucketRepository.save(bucket)
     }
 
-    async getBucket(bucketName: string) {
-        const bucket = BucketRepository.findByName(bucketName)
-        if (!bucket) {
-            await this.createBucket(bucketName)
-        }
-        return BucketRepository.findByName(bucketName)
-    }
+
 
     async donwloadFile(bucketName: string, path: string, destination: string) {
         try {
